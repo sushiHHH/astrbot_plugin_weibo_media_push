@@ -168,12 +168,16 @@ class WeiboAPI:
 
     def _build_image_url(self, pic: dict, mblog: dict) -> str | None:
         """按配置的分辨率构建图片 URL。"""
-        # 原图：优先 original_pic（/large/ 原尺寸）
-        if self.image_resolution == "original" and mblog.get("original_pic"):
-            url = mblog["original_pic"]
-            return url if url.startswith("http") else None
-
         size = self.IMAGE_SIZES.get(self.image_resolution, "mw2000")
+
+        # original_pic 是整条微博的兼容字段，不能在多图微博中对每张图重复使用。
+        # 优先使用当前 pic 的原图字段；否则根据 pid 从已有图床 URL 构造对应原图。
+        if self.image_resolution == "original":
+            for key in ("original", "original_url", "url"):
+                value = pic.get(key)
+                if value and str(value).startswith("http"):
+                    return str(value)
+
         large_url = (pic.get("large") or {}).get("url") or ""
         pid = pic.get("pid") or ""
 
@@ -243,12 +247,14 @@ class WeiboAPI:
             return None
 
         pics = []
+        seen_pic_urls = set()
         for pic in mblog.get("pics") or []:
             if not isinstance(pic, dict):
                 continue
             url = self._build_image_url(pic, mblog)
-            if url:
+            if url and url not in seen_pic_urls:
                 pics.append(url)
+                seen_pic_urls.add(url)
         # 兼容部分接口只有 original_pic 的情况
         if not pics and mblog.get("original_pic"):
             pics.append(mblog["original_pic"])
