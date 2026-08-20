@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# 运行时媒体临时目录（宿主机可见的挂载目录）
+media_tmp/
+
+# 编辑器/系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# git
+.git/

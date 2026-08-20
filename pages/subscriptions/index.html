@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>微博订阅管理</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="title-block">
+          <h1>微博订阅管理</h1>
+          <div class="runtime-status" id="runtime-status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>正在连接</span>
+          </div>
+        </div>
+        <button
+          class="icon-button"
+          id="refresh-button"
+          type="button"
+          title="刷新数据"
+          aria-label="刷新数据"
+        >↻</button>
+      </header>
+
+      <div class="error-notice is-hidden" id="error-notice"></div>
+
+      <section class="summary-band" aria-label="订阅概况">
+        <div class="metric">
+          <span class="metric-label">群聊</span>
+          <strong id="metric-groups">-</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">博主</span>
+          <strong id="metric-authors">-</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">订阅关系</span>
+          <strong id="metric-subscriptions">-</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">已启用</span>
+          <strong id="metric-active">-</strong>
+        </div>
+        <form class="interval-form" id="interval-form">
+          <label for="poll-interval">轮询间隔</label>
+          <div class="number-field">
+            <input
+              id="poll-interval"
+              name="minutes"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              required
+            />
+            <span>分钟</span>
+          </div>
+          <button class="primary-button small" type="submit">保存</button>
+        </form>
+      </section>
+
+      <div class="workspace" id="workspace" aria-busy="true">
+        <aside class="sidebar">
+          <div class="view-tabs" role="tablist">
+            <button
+              class="view-tab is-active"
+              id="tab-groups"
+              type="button"
+              role="tab"
+            >群聊</button>
+            <button
+              class="view-tab"
+              id="tab-others"
+              type="button"
+              role="tab"
+            >其他会话</button>
+          </div>
+          <input
+            class="session-search"
+            id="session-search"
+            type="search"
+            placeholder="搜索群名或群号"
+            autocomplete="off"
+          />
+          <div class="session-list" id="session-list"></div>
+        </aside>
+
+        <main class="detail-view" id="detail-view"></main>
+      </div>
+    </div>
+
+    <dialog class="confirm-dialog" id="remove-dialog">
+      <form method="dialog">
+        <h2>移除订阅</h2>
+        <p id="remove-dialog-text"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit">取消</button>
+          <button class="danger-button" id="confirm-remove" value="confirm" type="submit">移除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast is-hidden" id="toast" role="status"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,67 @@
+{
+  "basic": {
+    "description": "基础设置",
+    "type": "object",
+    "hint": "微博登录 Cookie 与轮询参数。",
+    "items": {
+      "weibo_cookie": {
+        "description": "微博登录 Cookie",
+        "type": "text",
+        "default": "",
+        "hint": "登录 weibo.com 后，浏览器 F12 → Network → 请求头中复制完整 Cookie。Cookie 失效后在此更新。"
+      },
+      "poll_interval_minutes": {
+        "description": "轮询间隔（分钟）",
+        "type": "int",
+        "default": 5,
+        "hint": "每隔多少分钟检查一次订阅博主的新微博。建议 3-10 分钟。"
+      },
+      "include_retweets": {
+        "description": "推送转发微博",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后连博主的转发微博一起推送；关闭后只推送原创微博。"
+      },
+      "max_video_size_mb": {
+        "description": "视频大小上限（MB）",
+        "type": "int",
+        "default": 200,
+        "hint": "超过此大小的视频将跳过不发送（避免发送失败）。"
+      },
+      "remove_watermark": {
+        "description": "去除图片水印",
+        "type": "bool",
+        "default": true,
+        "hint": "开启后自动裁掉图片底部的水印区域（微博水印位于图片底部边缘）。"
+      },
+      "watermark_crop_bottom": {
+        "description": "水印裁剪比例",
+        "type": "float",
+        "default": 0.10,
+        "hint": "裁剪图片底部比例去除水印：0.10=裁掉底部10%，范围 0-0.5。水印明显可调大，几乎无水印可调小。"
+      },
+      "push_recent_hours": {
+        "description": "订阅时追更最近N小时",
+        "type": "int",
+        "default": 24,
+        "hint": "订阅博主时，立即推送最近N小时内的媒体微博（0=不追更，只推新发布的）。"
+      },
+      "image_resolution": {
+        "description": "图片分辨率",
+        "type": "string",
+        "default": "high",
+        "options": ["original", "high", "medium", "low"],
+        "labels": ["原图", "高清(默认)", "中等", "普通"],
+        "hint": "原图=最大体积最清晰；高清=mw2000；中等=mw1024；普通=mw690。原图下载较慢，请按需选择。"
+      },
+      "video_resolution": {
+        "description": "视频清晰度",
+        "type": "string",
+        "default": "720p",
+        "options": ["1080p", "720p", "standard", "360p"],
+        "labels": ["1080P", "720P(默认)", "标清", "360P"],
+        "hint": "1080p优先取1080P源；720p优先取高清源；标清取普通源；360P取最低可用源。没有对应源时自动降级。"
+      }
+    }
+  }
+}

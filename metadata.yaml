@@ -1,0 +1,7 @@
+name: astrbot_plugin_weibo_media_push
+display_name: 微博媒体推送
+desc: 订阅微博博主，新微博自动推送，仅发送图片和视频（不含任何文字），仿 Twitter 推文转发插件的媒体推送模式
+version: v1.0.0
+author: custom
+support_platforms:
+  - aiocqhttp
