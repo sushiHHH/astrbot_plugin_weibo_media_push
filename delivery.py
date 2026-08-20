@@ -181,7 +181,12 @@ class MediaDeliveryService:
 
         # 1) 图片：全部下载后合并为一条消息
         img_components = []
+        seen_urls = set()
         for url in post.get("pics") or []:
+            # API 异常或历史数据可能包含重复 URL，发送前再做一次保险去重。
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
             path = await self._download(url, ".jpg")
             if path:
                 downloaded.append(path)
