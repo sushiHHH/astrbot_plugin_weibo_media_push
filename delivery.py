@@ -90,7 +90,8 @@ class MediaDeliveryService:
                 for name in os.listdir(directory):
                     path = os.path.join(directory, name)
                     try:
-                        if now - os.path.getmtime(path) > max_age_seconds:
+                        # 微博媒体不应长期落盘；启动清理传入 0 时全部删除。
+                        if max_age_seconds <= 0 or now - os.path.getmtime(path) > max_age_seconds:
                             os.remove(path)
                     except OSError:
                         pass
@@ -132,6 +133,7 @@ class MediaDeliveryService:
         target_dir 指定保存目录（视频存到挂载卷目录以便宿主机访问）。
         """
         directory = target_dir or self.tmp_dir
+        path = None
         try:
             os.makedirs(directory, exist_ok=True)
             async with aiohttp.ClientSession() as session:
@@ -159,6 +161,8 @@ class MediaDeliveryService:
                     return path
         except Exception as exc:
             logger.warning(f"下载媒体失败: {exc} url={url[:80]}")
+            if path:
+                self._remove_files([path])
             return None
 
     async def _check_video_size(self, url: str) -> int | None:
