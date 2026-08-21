@@ -263,23 +263,20 @@ class WeiboMediaPushPlugin(Star):
                 if new_posts:
                     new_posts.sort(key=lambda p: int(p["id"]))
                     pushed_new_ids = []
-                    for post in new_posts:
-                        try:
-                            sent = await self.delivery.send_post_media(
-                                umo, post
+                    try:
+                        sent = await self.delivery.send_posts_grouped(
+                            umo, new_posts
+                        )
+                        if sent:
+                            logger.info(
+                                f"已推送 {uid} 微博 {len(new_posts)} 条（按窗口聚合）"
                             )
-                            if sent:
-                                logger.info(
-                                    f"已推送 {uid} 微博 {post['id']} 媒体"
-                                )
-                                info["pushed_count"] = (
-                                    int(info.get("pushed_count", 0)) + 1
-                                )
-                                pushed_new_ids.append(post["id"])
-                        except Exception as exc:
-                            logger.error(
-                                f"推送 {uid} 微博 {post['id']} 失败: {exc}"
+                            info["pushed_count"] = (
+                                int(info.get("pushed_count", 0)) + len(new_posts)
                             )
+                            pushed_new_ids.extend(p["id"] for p in new_posts)
+                    except Exception as exc:
+                        logger.error(f"聚合推送 {uid} 失败: {exc}")
                     info["last_id"] = str(
                         max(int(p["id"]) for p in new_posts)
                     )
