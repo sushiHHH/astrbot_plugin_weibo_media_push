@@ -259,7 +259,10 @@ class MediaDeliveryService:
                 try:
                     await self.context.send_message(
                         umo,
-                        MessageChain(chain=[Comp.File(name=os.path.basename(path), file=path)]),
+                        MessageChain(chain=[Comp.File(
+                            name=os.path.basename(path),
+                            file=self._container_to_host_path(path),
+                        )]),
                     )
                     sent = True
                 except Exception as exc:
@@ -321,7 +324,10 @@ class MediaDeliveryService:
             try:
                 await self.context.send_message(
                     umo,
-                    MessageChain(chain=[Comp.File(name=os.path.basename(path), file=path)]),
+                    MessageChain(chain=[Comp.File(
+                            name=os.path.basename(path),
+                            file=self._container_to_host_path(path),
+                        )]),
                 )
                 sent_any = True
             except Exception as exc:
@@ -345,7 +351,10 @@ class MediaDeliveryService:
             path = await self._download(url, ".jpg", process_image=False)
             if path:
                 downloaded.append(path)
-                img_components.append(Comp.File(name=os.path.basename(path), file=path))
+                img_components.append(Comp.File(
+                            name=os.path.basename(path),
+                            file=self._container_to_host_path(path),
+                        ))
             else:
                 try:
                     comp = Comp.Image.fromURL(url)
