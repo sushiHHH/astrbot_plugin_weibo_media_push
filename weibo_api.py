@@ -140,8 +140,24 @@ class WeiboAPI:
         uid = user.get("idstr") or user.get("id")
         return str(uid) if uid else None
 
+    async def get_long_text(self, post_id: str) -> str | None:
+        """获取长微博/文章的完整正文。"""
+        url = f"{self.BASE}/statuses/extend?id={urllib.parse.quote(str(post_id))}"
+        try:
+            data = await self._get_json(url)
+            self._check_ok(data)
+            raw = (data.get("data") or {}).get("longTextContent")
+            if not raw:
+                raw = (data.get("data") or {}).get("text")
+            if not raw:
+                return None
+            return self._clean_text(str(raw))
+        except Exception as exc:
+            logger.warning(f"获取微博 {post_id} 全文失败: {exc}")
+            return None
+
     async def get_user_timeline(self, uid: str, page: int = 1) -> list[dict]:
-        """获取用户微博列表，返回标准化后的微博字典列表。"""
+        """获取用户微博列表，返回标准化后的微博列表。"""
         url = (
             f"{self.BASE}/api/container/getIndex"
             f"?type=uid&value={uid}&containerid=107603{uid}&page={page}"
@@ -276,6 +292,7 @@ class WeiboAPI:
             "id": mid,
             "created_at": str(mblog.get("created_at") or ""),
             "text": self._clean_text(mblog.get("text")),
+            "is_long_text": bool(mblog.get("isLongText") or mblog.get("is_long_text")),
             "screen_name": str((mblog.get("user") or {}).get("screen_name") or "微博用户"),
             "pics": pics,
             "video_url": str(video_url) if video_url else None,
