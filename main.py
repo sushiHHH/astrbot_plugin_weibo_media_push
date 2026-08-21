@@ -186,7 +186,7 @@ class WeiboMediaPushPlugin(Star):
                 "未配置微博 Cookie，推送功能不可用。"
                 "请用 /微博设置cookie <Cookie> 配置"
             )
-        # 启动时清理上次残留的媒体文件
+        # 启动时清理上次残留的图片和视频，服务器不保留媒体
         self.delivery._cleanup_old_files(0)
         self._running = True
         self._poll_task = asyncio.create_task(self._poll_loop())
