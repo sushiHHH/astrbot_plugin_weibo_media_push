@@ -276,6 +276,7 @@ class WeiboAPI:
             "id": mid,
             "created_at": str(mblog.get("created_at") or ""),
             "text": self._clean_text(mblog.get("text")),
+            "screen_name": str((mblog.get("user") or {}).get("screen_name") or "微博用户"),
             "pics": pics,
             "video_url": str(video_url) if video_url else None,
             "is_retweet": bool(mblog.get("retweeted_status")),
