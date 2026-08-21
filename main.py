@@ -231,15 +231,16 @@ class WeiboMediaPushPlugin(Star):
             return
         subs = await self.get_kv_data(KV_KEY, {}) or {}
         for umo, entries in list(subs.items()):
+            forward_window = self.delivery.is_forward_window(umo)
+            # 指定窗口将本轮所有订阅的微博汇总为一个合并转发。
+            pending: list[tuple[str, dict, list[dict]]] = []
             for uid, info in list(entries.items()):
                 if not info.get("status", True):
                     continue
                 try:
                     posts = await self.api.get_user_timeline(uid)
                 except WeiboAuthError as exc:
-                    logger.warning(
-                        f"微博Cookie失效，跳过 {uid}: {exc}"
-                    )
+                    logger.warning(f"微博Cookie失效，跳过 {uid}: {exc}")
                     continue
                 except Exception as exc:
                     logger.warning(f"获取 {uid} 时间线失败: {exc}")
@@ -259,36 +260,40 @@ class WeiboMediaPushPlugin(Star):
                     if post["is_retweet"] and not self.include_retweets:
                         continue
                     new_posts.append(post)
+                if not new_posts:
+                    continue
 
-                if new_posts:
-                    new_posts.sort(key=lambda p: int(p["id"]))
-                    pushed_new_ids = []
+                new_posts.sort(key=lambda p: int(p["id"]))
+                if forward_window:
+                    for post in new_posts:
+                        if post.get("is_long_text"):
+                            full_text = await self.api.get_long_text(post["id"])
+                            if full_text:
+                                post["text"] = full_text
+                    pending.append((uid, info, new_posts))
+                else:
                     try:
-                        if self.delivery.is_forward_window(umo):
-                            for post in new_posts:
-                                if post.get("is_long_text"):
-                                    full_text = await self.api.get_long_text(post["id"])
-                                    if full_text:
-                                        post["text"] = full_text
-                        sent = await self.delivery.send_posts_grouped(
-                            umo, new_posts
-                        )
+                        sent = await self.delivery.send_posts_grouped(umo, new_posts)
                         if sent:
-                            logger.info(
-                                f"已推送 {uid} 微博 {len(new_posts)} 条（按窗口聚合）"
-                            )
-                            info["pushed_count"] = (
-                                int(info.get("pushed_count", 0)) + len(new_posts)
-                            )
-                            pushed_new_ids.extend(p["id"] for p in new_posts)
+                            info["pushed_count"] = int(info.get("pushed_count", 0)) + len(new_posts)
+                            await self._record_pushed_ids(umo, uid, [p["id"] for p in new_posts])
                     except Exception as exc:
-                        logger.error(f"聚合推送 {uid} 失败: {exc}")
-                    info["last_id"] = str(
-                        max(int(p["id"]) for p in new_posts)
-                    )
-                    await self.put_kv_data(KV_KEY, subs)
-                    if pushed_new_ids:
-                        await self._record_pushed_ids(umo, uid, pushed_new_ids)
+                        logger.error(f"推送 {uid} 失败: {exc}")
+                info["last_id"] = str(max(int(p["id"]) for p in new_posts))
+
+            if pending:
+                all_posts = [post for _, _, posts in pending for post in posts]
+                all_posts.sort(key=lambda p: int(p["id"]))
+                try:
+                    sent = await self.delivery.send_posts_grouped(umo, all_posts)
+                    if sent:
+                        for uid, info, posts in pending:
+                            info["pushed_count"] = int(info.get("pushed_count", 0)) + len(posts)
+                            await self._record_pushed_ids(umo, uid, [p["id"] for p in posts])
+                        logger.info(f"已向 {umo} 汇总推送 {len(all_posts)} 条微博")
+                except Exception as exc:
+                    logger.error(f"整轮汇总推送 {umo} 失败: {exc}")
+            await self.put_kv_data(KV_KEY, subs)
 
     # ---------- 工具 ----------
 
