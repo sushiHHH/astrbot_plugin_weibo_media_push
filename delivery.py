@@ -210,6 +210,9 @@ class MediaDeliveryService:
         for post in posts:
             name = str(post.get("screen_name") or "微博用户")
             text = str(post.get("text") or "").strip()
+            retweeted_text = str(post.get("retweeted_text") or "").strip()
+            if retweeted_text:
+                text = f"{text}\n\n【转发内容】\n{retweeted_text}" if text else retweeted_text
             if post.get("is_long_text"):
                 text = "【全文】\n" + text
             content = [Comp.Plain(f"{name}:\\n{text}" if text else name)]
