@@ -83,6 +83,20 @@ class WeiboMediaPushPlugin(Star):
                 return value
         return default
 
+    @staticmethod
+    def _parse_forward_windows(value) -> set[str]:
+        """解析可编辑的合并转发窗口列表。"""
+        if isinstance(value, (list, tuple, set)):
+            parts = value
+        else:
+            parts = re.split(r"[,，\\n\\s]+", str(value or ""))
+        result = set()
+        for item in parts:
+            item = str(item).strip()
+            if item:
+                result.add(item)
+        return result
+
     def _set_cfg_value(self, key: str, value) -> None:
         """写入配置，跟随当前使用的存储结构。"""
         if "basic" in self.config and isinstance(self.config.get("basic"), dict):
@@ -127,6 +141,9 @@ class WeiboMediaPushPlugin(Star):
         self.video_resolution = str(
             self._cfg("video_resolution", "720p") or "720p"
         ).strip()
+        self.forward_windows = self._parse_forward_windows(
+            self._cfg("forward_windows", "634179473")
+        )
 
         self.api = WeiboAPI(
             self.cookie,
@@ -138,6 +155,7 @@ class WeiboMediaPushPlugin(Star):
             self.max_video_size_mb,
             self.remove_watermark,
             self.watermark_crop_bottom,
+            self.forward_windows,
         )
 
         self._poll_task: asyncio.Task | None = None
