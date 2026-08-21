@@ -193,6 +193,55 @@ class MediaDeliveryService:
             if item.isdigit()
         )
 
+    def is_forward_window(self, umo: str) -> bool:
+        return self._forward_window_matches(umo)
+
+    async def send_posts_grouped(self, umo: str, posts: list[dict]) -> bool:
+        """同一博主本轮微博合并为一条转发，避免逐条刷屏。"""
+        if not posts:
+            return False
+        if not self._forward_window_matches(umo) or len(posts) == 1:
+            return await self.send_post_media(umo, posts[0])
+
+        nodes = []
+        downloaded = []
+        videos = []
+        for post in posts:
+            name = str(post.get("screen_name") or "微博用户")
+            text = str(post.get("text") or "").strip()
+            content = [Comp.Plain(f"{name}:\\n{text}" if text else name)]
+            seen = set()
+            for url in post.get("pics") or []:
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                path = await self._download(url, ".jpg", process_image=False)
+                if path:
+                    downloaded.append(path)
+                    content.append(Comp.File(name=os.path.basename(path), file=path))
+            nodes.append(Node(content=content, name=name))
+            if post.get("video_url"):
+                videos.append(post["video_url"])
+        sent = False
+        try:
+            await self.context.send_message(umo, MessageChain(chain=[Nodes(nodes)]))
+            sent = True
+        except Exception as exc:
+            logger.warning(f"按博主合并转发失败，回退逐条发送: {exc}")
+            for post in posts:
+                sent = await self.send_post_media(umo, post) or sent
+        finally:
+            self._remove_files(downloaded)
+        for url in videos:
+            vpath = await self._download(url, ".mp4", target_dir=self.video_dir)
+            if vpath:
+                try:
+                    await self.context.send_message(umo, MessageChain(chain=[Comp.Video(file=self._container_to_host_path(vpath))]))
+                    sent = True
+                finally:
+                    self._remove_files([vpath])
+        return sent
+
     async def send_post_media(self, umo: str, post: dict) -> bool:
         """推送一条微博；指定窗口使用包含文字的合并转发。"""
         if self._forward_window_matches(umo):
@@ -276,7 +325,6 @@ class MediaDeliveryService:
             path = await self._download(url, ".jpg", process_image=False)
             if path:
                 downloaded.append(path)
-                image_files.append(path)
                 img_components.append(Comp.File(name=os.path.basename(path), file=path))
             else:
                 try:
