@@ -196,7 +196,6 @@ class MediaDeliveryService:
     async def _send_post_forward(self, umo: str, post: dict) -> bool:
         """为指定窗口构建单条微博的合并转发节点。"""
         sent_any = False
-        downloaded: list[str] = []
         content = []
         name = str(post.get("screen_name") or "微博用户")
         text = str(post.get("text") or "").strip()
@@ -210,17 +209,14 @@ class MediaDeliveryService:
             if not url or url in seen_urls:
                 continue
             seen_urls.add(url)
-            path = await self._download(url, ".jpg")
-            if path:
-                downloaded.append(path)
-                content.append(Comp.Image(file=path))
-            else:
-                try:
-                    comp = Comp.Image.fromURL(url)
-                    if comp is not None:
-                        content.append(comp)
-                except Exception as exc:
-                    logger.warning(f"合并转发图片构建失败: {url[:60]}, {exc}")
+            try:
+                # 直接把高清 URL 放进合并转发节点，避免本地文件被 NapCat
+                # 二次处理或因容器路径映射导致降质。
+                comp = Comp.Image.fromURL(url)
+                if comp is not None:
+                    content.append(comp)
+            except Exception as exc:
+                logger.warning(f"合并转发图片构建失败: {url[:60]}, {exc}")
 
         try:
             if len(content) > 1:
@@ -240,8 +236,7 @@ class MediaDeliveryService:
                 sent_any = True
             except Exception as fallback_exc:
                 logger.warning(f"合并转发回退失败: {fallback_exc}")
-        finally:
-            self._remove_files(downloaded)
+        # 图片组件使用 URL 发送，避免 NapCat/QQ 读取容器内路径时缩放或失败。
 
         # 视频在 CQ 的合并转发节点中兼容性较差，发送为同一微博紧随其后的独立视频。
         video_url = post.get("video_url")
