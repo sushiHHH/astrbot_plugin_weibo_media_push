@@ -115,7 +115,12 @@ class MediaDeliveryService:
                 if crop_h >= h:
                     return
                 cropped = img.crop((0, 0, w, h - crop_h))
-                cropped.save(path, quality=92)
+                # 裁剪必然需要重写 JPEG；使用最高质量、不进行色度二次采样，
+                # 只改变底部被裁区域，最大程度保持原图的尺寸和画质。
+                save_kwargs = {"quality": 100, "subsampling": 0}
+                if img.format == "PNG":
+                    save_kwargs = {}
+                cropped.save(path, **save_kwargs)
             logger.info(
                 f"已裁除底部水印区域 {crop_h}px: {os.path.basename(path)}"
             )
