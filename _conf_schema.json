@@ -32,7 +32,7 @@
         "description": "去除图片水印",
         "type": "bool",
         "default": true,
-        "hint": "开启后自动裁掉图片底部的水印区域（微博水印位于图片底部边缘）。"
+        "hint": "开启后仅裁掉图片底部水印区域。会保持原始宽度和所选分辨率；JPEG 会以最高质量重新编码，因此文件不再与微博原文件字节完全相同。请仅处理有权编辑的图片。"
       },
       "watermark_crop_bottom": {
         "description": "水印裁剪比例",
@@ -52,7 +52,7 @@
         "default": "high",
         "options": ["original", "high", "medium", "low"],
         "labels": ["原图", "高清(默认)", "中等", "普通"],
-        "hint": "原图=最大体积最清晰；高清=mw2000；中等=mw1024；普通=mw690。原图下载较慢，请按需选择。"
+        "hint": "原图=微博 large 原始尺寸；高清=mw2000；中等=mw1024；普通=mw690。开启去水印时仅裁掉底部比例，保持所选分辨率的原始宽度。"
       },
       "video_resolution": {
         "description": "视频清晰度",
