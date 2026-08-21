@@ -209,6 +209,8 @@ class MediaDeliveryService:
         for post in posts:
             name = str(post.get("screen_name") or "微博用户")
             text = str(post.get("text") or "").strip()
+            if post.get("is_long_text"):
+                text = "【全文】\n" + text
             content = [Comp.Plain(f"{name}:\\n{text}" if text else name)]
             seen = set()
             for url in post.get("pics") or []:
