@@ -127,8 +127,9 @@ class MediaDeliveryService:
         url: str,
         ext: str,
         target_dir: str | None = None,
+        process_image: bool = True,
     ) -> str | None:
-        """下载文件到临时目录（图片自动裁水印），返回本地路径；失败返回 None。
+        """下载文件到临时目录，返回本地路径；失败返回 None。
 
         target_dir 指定保存目录（视频存到挂载卷目录以便宿主机访问）。
         """
@@ -157,7 +158,8 @@ class MediaDeliveryService:
                     if os.path.getsize(path) == 0:
                         os.remove(path)
                         return None
-                    self._maybe_crop_watermark(path, ext)
+                    if process_image:
+                        self._maybe_crop_watermark(path, ext)
                     return path
         except Exception as exc:
             logger.warning(f"下载媒体失败: {exc} url={url[:80]}")
@@ -208,19 +210,18 @@ class MediaDeliveryService:
         else:
             content.append(Comp.Plain(name))
 
+        downloaded: list[str] = []
         seen_urls = set()
         for url in post.get("pics") or []:
             if not url or url in seen_urls:
                 continue
             seen_urls.add(url)
-            try:
-                # 直接把高清 URL 放进合并转发节点，避免本地文件被 NapCat
-                # 二次处理或因容器路径映射导致降质。
-                comp = Comp.Image.fromURL(url)
-                if comp is not None:
-                    content.append(comp)
-            except Exception as exc:
-                logger.warning(f"合并转发图片构建失败: {url[:60]}, {exc}")
+            path = await self._download(url, ".jpg", process_image=False)
+            if path:
+                downloaded.append(path)
+                content.append(Comp.File(name=os.path.basename(path), file=path))
+            else:
+                logger.warning(f"原图文件下载失败: {url[:60]}")
 
         try:
             if len(content) > 1:
@@ -240,8 +241,7 @@ class MediaDeliveryService:
                 sent_any = True
             except Exception as fallback_exc:
                 logger.warning(f"合并转发回退失败: {fallback_exc}")
-        # 图片组件使用 URL 发送，避免 NapCat/QQ 读取容器内路径时缩放或失败。
-
+        self._remove_files(downloaded)
         # 视频在 CQ 的合并转发节点中兼容性较差，发送为同一微博紧随其后的独立视频。
         video_url = post.get("video_url")
         if video_url:
@@ -265,7 +265,7 @@ class MediaDeliveryService:
         sent_any = False
         downloaded: list[str] = []  # 本次下载的本地文件，发送后立即删除
 
-        # 1) 图片：全部下载后合并为一条消息
+        # 1) 图片：以文件发送，保留微博原始 JPEG，不让 QQ 图片消息压缩
         img_components = []
         seen_urls = set()
         for url in post.get("pics") or []:
@@ -273,10 +273,11 @@ class MediaDeliveryService:
             if not url or url in seen_urls:
                 continue
             seen_urls.add(url)
-            path = await self._download(url, ".jpg")
+            path = await self._download(url, ".jpg", process_image=False)
             if path:
                 downloaded.append(path)
-                img_components.append(Comp.Image(file=path))
+                image_files.append(path)
+                img_components.append(Comp.File(name=os.path.basename(path), file=path))
             else:
                 try:
                     comp = Comp.Image.fromURL(url)
