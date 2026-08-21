@@ -8,6 +8,7 @@ import aiohttp
 from astrbot.api import logger
 from astrbot.api.event import MessageChain
 import astrbot.api.message_components as Comp
+from astrbot.api.message_components import Node, Nodes
 
 DOWNLOAD_HEADERS = {
     "User-Agent": (
@@ -175,7 +176,81 @@ class MediaDeliveryService:
             return None
 
     async def send_post_media(self, umo: str, post: dict) -> bool:
-        """推送一条微博的媒体（图片+视频），不含文字。"""
+        """推送一条微博；指定窗口使用包含文字的合并转发。"""
+        if umo.endswith(":GroupMessage:634179473"):
+            return await self._send_post_forward(umo, post)
+        return await self._send_post_media_legacy(umo, post)
+
+    async def _send_post_forward(self, umo: str, post: dict) -> bool:
+        """为指定窗口构建单条微博的合并转发节点。"""
+        sent_any = False
+        downloaded: list[str] = []
+        content = []
+        name = str(post.get("screen_name") or "微博用户")
+        text = str(post.get("text") or "").strip()
+        if text:
+            content.append(Comp.Plain(f"{name}:\n{text}"))
+        else:
+            content.append(Comp.Plain(name))
+
+        seen_urls = set()
+        for url in post.get("pics") or []:
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            path = await self._download(url, ".jpg")
+            if path:
+                downloaded.append(path)
+                content.append(Comp.Image(file=path))
+            else:
+                try:
+                    comp = Comp.Image.fromURL(url)
+                    if comp is not None:
+                        content.append(comp)
+                except Exception as exc:
+                    logger.warning(f"合并转发图片构建失败: {url[:60]}, {exc}")
+
+        try:
+            if len(content) > 1:
+                await self.context.send_message(
+                    umo, MessageChain(chain=[Nodes([Node(content=content, name=name)])])
+                )
+                sent_any = True
+            elif text:
+                await self.context.send_message(
+                    umo, MessageChain(chain=[Nodes([Node(content=content, name=name)])])
+                )
+                sent_any = True
+        except Exception as exc:
+            logger.warning(f"合并转发发送失败，回退普通消息: {exc}")
+            try:
+                await self.context.send_message(umo, MessageChain(chain=content))
+                sent_any = True
+            except Exception as fallback_exc:
+                logger.warning(f"合并转发回退失败: {fallback_exc}")
+        finally:
+            self._remove_files(downloaded)
+
+        # 视频在 CQ 的合并转发节点中兼容性较差，发送为同一微博紧随其后的独立视频。
+        video_url = post.get("video_url")
+        if video_url:
+            size = await self._check_video_size(video_url)
+            if size is None or size <= self.max_video_size_mb * 1024 * 1024:
+                vpath = await self._download(video_url, ".mp4", target_dir=self.video_dir)
+                if vpath:
+                    try:
+                        await self.context.send_message(
+                            umo, MessageChain(chain=[Comp.Video(file=self._container_to_host_path(vpath))])
+                        )
+                        sent_any = True
+                    except Exception as exc:
+                        logger.warning(f"合并转发视频发送失败: {exc}")
+                    finally:
+                        self._remove_files([vpath])
+        return sent_any
+
+    async def _send_post_media_legacy(self, umo: str, post: dict) -> bool:
+        """原有的纯媒体发送流程。"""
         sent_any = False
         downloaded: list[str] = []  # 本次下载的本地文件，发送后立即删除
 
