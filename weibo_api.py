@@ -265,24 +265,29 @@ class WeiboAPI:
         if not mid:
             return None
 
+        # 转发微博的媒体往往在 retweeted_status；外层没有媒体时继承它。
+        media_blog = mblog
+        retweeted = mblog.get("retweeted_status") or {}
+        if not (mblog.get("pics") or mblog.get("page_info")) and isinstance(retweeted, dict):
+            media_blog = retweeted
+
         pics = []
         seen_pic_urls = set()
-        for pic in mblog.get("pics") or []:
+        for pic in media_blog.get("pics") or []:
             if not isinstance(pic, dict):
                 continue
-            url = self._build_image_url(pic, mblog)
+            url = self._build_image_url(pic, media_blog)
             if url and url not in seen_pic_urls:
                 pics.append(url)
                 seen_pic_urls.add(url)
-        # 兼容部分接口只有 original_pic 的情况。该字段属于整条微博，
-        # 只在没有逐图数据时使用，避免转发多图微博重复或误用缩略图。
-        if not pics and mblog.get("original_pic"):
-            original = str(mblog["original_pic"])
+        # 兼容部分接口只有 original_pic 的情况。
+        if not pics and media_blog.get("original_pic"):
+            original = str(media_blog["original_pic"])
             if original.startswith("http"):
                 pics.append(original)
 
         video_url = None
-        page_info = mblog.get("page_info") or {}
+        page_info = media_blog.get("page_info") or {}
         if page_info.get("type") == "video":
             video_url = self._build_video_url(
                 page_info.get("media_info") or {}
@@ -292,6 +297,7 @@ class WeiboAPI:
             "id": mid,
             "created_at": str(mblog.get("created_at") or ""),
             "text": self._clean_text(mblog.get("text")),
+            "retweeted_text": self._clean_text(retweeted.get("text")) if isinstance(retweeted, dict) else "",
             "is_long_text": bool(mblog.get("isLongText") or mblog.get("is_long_text")),
             "screen_name": str((mblog.get("user") or {}).get("screen_name") or "微博用户"),
             "pics": pics,
