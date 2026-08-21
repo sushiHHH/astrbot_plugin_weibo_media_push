@@ -200,8 +200,10 @@ class MediaDeliveryService:
         """同一博主本轮微博合并为一条转发，避免逐条刷屏。"""
         if not posts:
             return False
-        if not self._forward_window_matches(umo) or len(posts) == 1:
+        if not self._forward_window_matches(umo):
             return await self.send_post_media(umo, posts[0])
+        if len(posts) == 1:
+            return await self._send_post_forward(umo, posts[0])
 
         nodes = []
         downloaded = []
@@ -217,10 +219,17 @@ class MediaDeliveryService:
                 if not url or url in seen:
                     continue
                 seen.add(url)
+                # QQ 合并转发节点不可靠地支持 File，改用图片 URL 使其在
+                # 转发中正常显示；原始 JPEG 文件会在转发后独立补发以保真。
+                try:
+                    image = Comp.Image.fromURL(url)
+                    if image is not None:
+                        content.append(image)
+                except Exception as exc:
+                    logger.warning(f"合并节点图片构建失败: {exc}")
                 path = await self._download(url, ".jpg", process_image=False)
                 if path:
                     downloaded.append(path)
-                    content.append(Comp.File(name=os.path.basename(path), file=path))
             nodes.append(Node(content=content, name=name))
             if post.get("video_url"):
                 videos.append(post["video_url"])
@@ -233,6 +242,17 @@ class MediaDeliveryService:
             for post in posts:
                 sent = await self.send_post_media(umo, post) or sent
         finally:
+            # 合并转发后额外逐张发送原始 JPEG 文件，避免 QQ 对转发节点
+            # 内图片压缩，同时解决 File 节点不显示的问题。
+            for path in downloaded:
+                try:
+                    await self.context.send_message(
+                        umo,
+                        MessageChain(chain=[Comp.File(name=os.path.basename(path), file=path)]),
+                    )
+                    sent = True
+                except Exception as exc:
+                    logger.warning(f"原图文件补发失败: {exc}")
             self._remove_files(downloaded)
         for url in videos:
             vpath = await self._download(url, ".mp4", target_dir=self.video_dir)
@@ -270,7 +290,9 @@ class MediaDeliveryService:
             path = await self._download(url, ".jpg", process_image=False)
             if path:
                 downloaded.append(path)
-                content.append(Comp.File(name=os.path.basename(path), file=path))
+                # 单条转发同样使用可显示的图片组件；原图文件随后独立补发。
+                image = Comp.Image(file=path)
+                content.append(image)
             else:
                 logger.warning(f"原图文件下载失败: {url[:60]}")
 
@@ -292,6 +314,15 @@ class MediaDeliveryService:
                 sent_any = True
             except Exception as fallback_exc:
                 logger.warning(f"合并转发回退失败: {fallback_exc}")
+        for path in downloaded:
+            try:
+                await self.context.send_message(
+                    umo,
+                    MessageChain(chain=[Comp.File(name=os.path.basename(path), file=path)]),
+                )
+                sent_any = True
+            except Exception as exc:
+                logger.warning(f"原图文件补发失败: {exc}")
         self._remove_files(downloaded)
         # 视频在 CQ 的合并转发节点中兼容性较差，发送为同一微博紧随其后的独立视频。
         video_url = post.get("video_url")
