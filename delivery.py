@@ -29,8 +29,10 @@ class MediaDeliveryService:
         max_video_size_mb: int = 200,
         remove_watermark: bool = True,
         watermark_crop_bottom: float = 0.10,
+        forward_windows: set[str] | None = None,
     ):
         self.context = context
+        self.forward_windows = set(forward_windows or ())
         self.max_video_size_mb = max_video_size_mb
         self.remove_watermark = remove_watermark
         self.watermark_crop_bottom = watermark_crop_bottom
@@ -175,9 +177,19 @@ class MediaDeliveryService:
         except Exception:
             return None
 
+    def _forward_window_matches(self, umo: str) -> bool:
+        """支持填写群号或完整 UMO。"""
+        if not self.forward_windows:
+            return False
+        return umo in self.forward_windows or any(
+            umo.endswith(f":GroupMessage:{item}")
+            for item in self.forward_windows
+            if item.isdigit()
+        )
+
     async def send_post_media(self, umo: str, post: dict) -> bool:
         """推送一条微博；指定窗口使用包含文字的合并转发。"""
-        if umo.endswith(":GroupMessage:634179473"):
+        if self._forward_window_matches(umo):
             return await self._send_post_forward(umo, post)
         return await self._send_post_media_legacy(umo, post)
 
