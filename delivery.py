@@ -207,7 +207,6 @@ class MediaDeliveryService:
 
         nodes = []
         downloaded = []
-        videos = []
         for post in posts:
             name = str(post.get("screen_name") or "微博用户")
             text = str(post.get("text") or "").strip()
@@ -230,9 +229,18 @@ class MediaDeliveryService:
                 path = await self._download(url, ".jpg", process_image=False)
                 if path:
                     downloaded.append(path)
+            video_url = post.get("video_url")
+            if video_url:
+                vpath = await self._download(
+                    video_url, ".mp4", target_dir=self.video_dir
+                )
+                if vpath:
+                    downloaded.append(vpath)
+                    # 用文件节点承载视频，确保视频与该条微博归属同一合并转发。
+                    content.append(
+                        Comp.File(name=os.path.basename(vpath), file=self._container_to_host_path(vpath))
+                    )
             nodes.append(Node(content=content, name=name))
-            if post.get("video_url"):
-                videos.append(post["video_url"])
         sent = False
         try:
             await self.context.send_message(umo, MessageChain(chain=[Nodes(nodes)]))
@@ -254,14 +262,6 @@ class MediaDeliveryService:
                 except Exception as exc:
                     logger.warning(f"原图文件补发失败: {exc}")
             self._remove_files(downloaded)
-        for url in videos:
-            vpath = await self._download(url, ".mp4", target_dir=self.video_dir)
-            if vpath:
-                try:
-                    await self.context.send_message(umo, MessageChain(chain=[Comp.Video(file=self._container_to_host_path(vpath))]))
-                    sent = True
-                finally:
-                    self._remove_files([vpath])
         return sent
 
     async def send_post_media(self, umo: str, post: dict) -> bool:
@@ -324,22 +324,6 @@ class MediaDeliveryService:
             except Exception as exc:
                 logger.warning(f"原图文件补发失败: {exc}")
         self._remove_files(downloaded)
-        # 视频在 CQ 的合并转发节点中兼容性较差，发送为同一微博紧随其后的独立视频。
-        video_url = post.get("video_url")
-        if video_url:
-            size = await self._check_video_size(video_url)
-            if size is None or size <= self.max_video_size_mb * 1024 * 1024:
-                vpath = await self._download(video_url, ".mp4", target_dir=self.video_dir)
-                if vpath:
-                    try:
-                        await self.context.send_message(
-                            umo, MessageChain(chain=[Comp.Video(file=self._container_to_host_path(vpath))])
-                        )
-                        sent_any = True
-                    except Exception as exc:
-                        logger.warning(f"合并转发视频发送失败: {exc}")
-                    finally:
-                        self._remove_files([vpath])
         return sent_any
 
     async def _send_post_media_legacy(self, umo: str, post: dict) -> bool:
