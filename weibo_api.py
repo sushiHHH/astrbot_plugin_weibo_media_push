@@ -170,26 +170,29 @@ class WeiboAPI:
         """按配置的分辨率构建图片 URL。"""
         size = self.IMAGE_SIZES.get(self.image_resolution, "mw2000")
 
-        # original_pic 是整条微博的兼容字段，不能在多图微博中对每张图重复使用。
-        # 优先使用当前 pic 的原图字段；否则根据 pid 从已有图床 URL 构造对应原图。
+        # 当前图片的 large URL 是可靠的尺寸/图床来源。原图模式不能优先
+        # 使用 pic.url：该字段在转发微博中经常只是缩略图，直接发送会很糊。
+        large_url = str((pic.get("large") or {}).get("url") or "")
+        pid = str(pic.get("pid") or "")
+
+        # 微博图床支持按 pid 重新拼尺寸；保留接口返回的图床子域名，兼容
+        # wx、tva、tvax 等域名，而不是只匹配 wx 数字域名。
+        if pid and large_url.startswith("http"):
+            match = re.match(r"(https://[^/]+\.sinaimg\.cn)/", large_url)
+            if match:
+                return f"{match.group(1)}/{size}/{pid}.jpg"
+
         if self.image_resolution == "original":
-            for key in ("original", "original_url", "url"):
+            # 接口明确给出的当前图片原图字段才作为回退，绝不把缩略图 url
+            # 当成原图；没有时 large_url 仍比 pic.url 清晰。
+            for key in ("original", "original_url"):
                 value = pic.get(key)
                 if value and str(value).startswith("http"):
                     return str(value)
-
-        large_url = (pic.get("large") or {}).get("url") or ""
-        pid = pic.get("pid") or ""
-
-        # 由现有 URL 推导图床子域名，再拼目标尺寸
-        if pid and large_url:
-            match = re.match(r"https://(wx\d)\.sinaimg\.cn/", large_url)
-            if match:
-                url = f"https://{match.group(1)}.sinaimg.cn/{size}/{pid}.jpg"
-                return url if url.startswith("http") else None
+            return large_url or None
 
         if self.image_resolution == "high" and large_url:
-            return large_url if large_url.startswith("http") else None
+            return large_url
         fallback = pic.get("url") or pic.get("original")
         return fallback if fallback and str(fallback).startswith("http") else None
 
@@ -255,9 +258,12 @@ class WeiboAPI:
             if url and url not in seen_pic_urls:
                 pics.append(url)
                 seen_pic_urls.add(url)
-        # 兼容部分接口只有 original_pic 的情况
+        # 兼容部分接口只有 original_pic 的情况。该字段属于整条微博，
+        # 只在没有逐图数据时使用，避免转发多图微博重复或误用缩略图。
         if not pics and mblog.get("original_pic"):
-            pics.append(mblog["original_pic"])
+            original = str(mblog["original_pic"])
+            if original.startswith("http"):
+                pics.append(original)
 
         video_url = None
         page_info = mblog.get("page_info") or {}
