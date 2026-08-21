@@ -264,6 +264,12 @@ class WeiboMediaPushPlugin(Star):
                     new_posts.sort(key=lambda p: int(p["id"]))
                     pushed_new_ids = []
                     try:
+                        if self.delivery.is_forward_window(umo):
+                            for post in new_posts:
+                                if post.get("is_long_text"):
+                                    full_text = await self.api.get_long_text(post["id"])
+                                    if full_text:
+                                        post["text"] = full_text
                         sent = await self.delivery.send_posts_grouped(
                             umo, new_posts
                         )
